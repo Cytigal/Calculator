@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鋁窗裁切計算機</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            -webkit-tap-highlight-color: transparent; /* 移除行動裝置點擊高亮 */
+        }
+        /* 讓 input[type=number] 在 iOS 上更好看 */
+        input[type=number] {
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+            appearance: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <div class="w-full max-w-2xl mx-auto p-4 md:p-6">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-900">鋁窗裁切計算機</h1>
+            <p class="text-gray-600 mt-2">選擇窗戶規格並輸入尺寸，即可快速計算。</p>
+        </header>
+
+        <!-- 主操作區 -->
+        <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 space-y-6">
+            
+            <!-- 步驟一：選擇規格 -->
+            <div>
+                <label for="specSelector" class="block text-lg font-medium text-gray-800 mb-2">1. 選擇規格</label>
+                <select id="specSelector" class="w-full p-3 bg-gray-100 border-2 border-gray-200 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                    <!-- 選項會由 JS 動態載入 -->
+                </select>
+            </div>
+
+            <!-- 步驟二：輸入尺寸 -->
+            <div>
+                <label class="block text-lg font-medium text-gray-800 mb-2">2. 輸入包外尺寸 (mm)</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="number" id="inputWidth" placeholder="寬度 (W)" class="w-full p-3 bg-gray-100 border-2 border-gray-200 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" inputmode="decimal">
+                    <input type="number" id="inputHeight" placeholder="高度 (H)" class="w-full p-3 bg-gray-100 border-2 border-gray-200 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" inputmode="decimal">
+                </div>
+            </div>
+
+            <!-- 步驟三：計算按鈕 -->
+            <div class="flex items-center gap-4">
+                <button id="calculateButton" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 active:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform transform active:scale-95 text-lg">
+                    計算
+                </button>
+                 <button id="resetButton" class="w-auto bg-gray-200 text-gray-700 font-bold py-3 px-5 rounded-lg hover:bg-gray-300 active:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-transform transform active:scale-95">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 4l16 16" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 結果顯示區 -->
+        <div id="resultsContainer" class="mt-8 hidden">
+             <h2 class="text-2xl font-bold text-gray-900 mb-4">計算結果</h2>
+             <div id="specDescription" class="mb-4 p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg"></div>
+             
+             <!-- 固定尺寸 -->
+             <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">固定尺寸</h3>
+                <div id="staticResults" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+             </div>
+             
+             <!-- 計算尺寸 -->
+             <div>
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">計算尺寸</h3>
+                <div id="calculatedResults" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+             </div>
+        </div>
+
+        <!-- 錯誤提示訊息 -->
+        <div id="error-message" class="mt-4 p-4 bg-red-100 text-red-700 rounded-lg hidden"></div>
+    </div>
+
+    <script>
+        // --- 規格資料庫 ---
+        // 根據您提供的 CSV 檔案，將規則轉換為計算公式
+        const SPECS = [
+            {
+                id: 'spec1',
+                title: '887# 2拉窗',
+                description: '',
+                staticValues: { '外直': 913, '大勾': 457, '內橫': '-', '紗直': 903 },
+                formulas: {
+                    '外橫': (w, h) => w - 41,
+                    '小勾': (w, h) => h - 55,
+                    '玻璃橫': (w, h) => (w - 168) / 2,
+                    '玻璃直': (w, h) => h - 195,
+                    '紗橫': (w, h) => (w - 128) / 2,
+                }
+            },
+            {
+                id: 'spec2',
+                title: '887# 4拉窗',
+                description: '假設為對稱四拉，計算基於單一拉窗寬度 (W/2)。',
+                staticValues: { '外直': 913, '大勾': 467.5, '內橫': '-', '紗直': 903 },
+                formulas: {
+                    '外橫': (w, h) => w - 41,
+                    '小勾': (w, h) => h - 55,
+                    '玻璃橫': (w, h) => ((w/2) - 147) / 2,
+                    '玻璃直': (w, h) => h - 195,
+                    '紗橫': (w, h) => ((w/2) - 111) / 2,
+                }
+            },
+            {
+                id: 'spec3',
+                title: '887# 2拉窗 (開天/上固下活)',
+                description: '固定高度 500mm',
+                staticValues: { '外直': 1452, '大勾': 457, '內橫': '-', '紗直': 1442 },
+                formulas: {
+                    '外橫': (w, h) => w - 41,
+                    '小勾': (w, h) => h - 516,
+                    '玻璃橫': (w, h) => (w - 168) / 2,
+                    '玻璃直': (w, h) => h - 656,
+                    '紗橫': (w, h) => (w - 128) / 2,
+                }
+            },
+            {
+                id: 'spec4',
+                title: '887# 2拉窗 (開天/上活下固)',
+                description: '固定高度 500mm',
+                staticValues: { '外直': 1452, '大勾': 457, '內橫': '-', '紗直': 1442 },
+                formulas: {
+                    '外橫': (w, h) => w - 41,
+                    '小勾': (w, h) => h - 516,
+                    '玻璃橫': (w, h) => (w - 168) / 2,
+                    '玻璃直': (w, h) => h - 656,
+                    '紗橫': (w, h) => (w - 128) / 2,
+                }
+            }
+        ];
+
+        // --- DOM 元素 ---
+        const specSelector = document.getElementById('specSelector');
+        const inputWidth = document.getElementById('inputWidth');
+        const inputHeight = document.getElementById('inputHeight');
+        const calculateButton = document.getElementById('calculateButton');
+        const resetButton = document.getElementById('resetButton');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const specDescription = document.getElementById('specDescription');
+        const staticResults = document.getElementById('staticResults');
+        const calculatedResults = document.getElementById('calculatedResults');
+        const errorMessage = document.getElementById('error-message');
+
+        // --- 函數 ---
+
+        /**
+         * 填充規格選擇器的選項
+         */
+        function populateSelector() {
+            SPECS.forEach(spec => {
+                const option = document.createElement('option');
+                option.value = spec.id;
+                option.textContent = spec.title;
+                specSelector.appendChild(option);
+            });
+        }
+
+        /**
+         * 顯示錯誤訊息
+         * @param {string} msg - 要顯示的錯誤訊息
+         */
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorMessage.classList.remove('hidden');
+            resultsContainer.classList.add('hidden');
+        }
+
+        /**
+         * 隱藏錯誤訊息
+         */
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+
+        /**
+         * 創建並返回一個結果項目元素
+         * @param {string} label - 標籤
+         * @param {string|number} value - 值
+         * @returns {string} - 結果項目的 HTML 字串
+         */
+        function createResultItem(label, value) {
+            return `
+                <div class="bg-gray-100 p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">${label}</p>
+                    <p class="text-lg font-bold text-gray-900">${value}</p>
+                </div>
+            `;
+        }
+        
+        /**
+         * 執行計算並渲染結果
+         */
+        function calculate() {
+            hideError();
+            const width = parseFloat(inputWidth.value);
+            const height = parseFloat(inputHeight.value);
+
+            if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+                showError('請輸入有效的寬度和高度數值。');
+                return;
+            }
+
+            const selectedSpecId = specSelector.value;
+            const spec = SPECS.find(s => s.id === selectedSpecId);
+
+            if (!spec) {
+                showError('找不到選擇的規格。');
+                return;
+            }
+
+            // 顯示規格描述
+            if (spec.description) {
+                specDescription.textContent = `備註：${spec.description}`;
+                specDescription.classList.remove('hidden');
+            } else {
+                specDescription.classList.add('hidden');
+            }
+            
+            // 渲染固定尺寸
+            staticResults.innerHTML = '';
+            for (const key in spec.staticValues) {
+                staticResults.innerHTML += createResultItem(key, spec.staticValues[key]);
+            }
+
+            // 渲染計算尺寸
+            calculatedResults.innerHTML = '';
+            for (const key in spec.formulas) {
+                const result = spec.formulas[key](width, height);
+                // 將結果四捨五入到小數點後一位
+                const roundedResult = Math.round(result * 10) / 10;
+                calculatedResults.innerHTML += createResultItem(key, roundedResult);
+            }
+
+            resultsContainer.classList.remove('hidden');
+        }
+        
+        /**
+         * 重設所有輸入和結果
+         */
+        function resetAll() {
+            inputWidth.value = '';
+            inputHeight.value = '';
+            resultsContainer.classList.add('hidden');
+            hideError();
+            specSelector.selectedIndex = 0;
+            inputWidth.focus();
+        }
+
+        // --- 初始化與事件監聽 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            populateSelector();
+            calculateButton.addEventListener('click', calculate);
+            resetButton.addEventListener('click', resetAll);
+            
+            // 讓使用者按 Enter 也能計算
+            inputWidth.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') calculate();
+            });
+            inputHeight.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') calculate();
+            });
+        });
+    </script>
+</body>
+</html>
